@@ -99,7 +99,7 @@ bool MetroModel::LoadFromData(MemStream& stream, const size_t fileIdx) {
 
     this->ReadSubChunks(stream);
 
-    if (mVersion >= kModelVersionArktika1) {
+    if (mVersion >= kModelVersionRedux) {
         this->LoadMotions();
     }
 
