@@ -13,7 +13,7 @@ struct AttributeCurve {
 class MetroMotion {
 public:
     static const size_t kFrameRate = 30;
-    static const size_t kMVersionRedux = 0xF;
+
 public:
     MetroMotion(const CharString& name = "");
     ~MetroMotion();
@@ -54,7 +54,6 @@ public:
     size_t                  mJumpFrame;
     size_t                  mLandFrame;
     Bitset256               mAffectedBones;
-    Bitset128               mAffectedBones_Redux;
     size_t                  mMotionsDataSize;
     size_t                  mMotionsOffsetsSize;
     Bitset256               mHighQualityBones;

@@ -30,7 +30,6 @@ MetroMotion::MetroMotion(const CharString& name)
     , mJumpFrame(0)
     , mLandFrame(0)
     , mAffectedBones()
-    , mAffectedBones_Redux()
     , mMotionsDataSize(0)
     , mMotionsOffsetsSize(0)
     , mHighQualityBones()
@@ -70,10 +69,7 @@ bool MetroMotion::LoadHeader(MemStream& stream) {
                 mJumpFrame = stream.ReadTyped<uint16_t>();
                 mLandFrame = stream.ReadTyped<uint16_t>();
 
-                if (mVersion == kMVersionRedux)
-                    stream.ReadStruct(mAffectedBones_Redux);
-                else
-                    stream.ReadStruct(mAffectedBones);
+                stream.ReadStruct(mAffectedBones);
 
                 mMotionsDataSize = stream.ReadTyped<uint32_t>();
                 mMotionsOffsetsSize = stream.ReadTyped<uint32_t>();
@@ -119,10 +115,7 @@ bool MetroMotion::LoadFromData(MemStream& stream) {
                 mJumpFrame = stream.ReadTyped<uint16_t>();
                 mLandFrame = stream.ReadTyped<uint16_t>();
 
-                if (mVersion == kMVersionRedux)
-                    stream.ReadStruct(mAffectedBones_Redux);
-                else
-                    stream.ReadStruct(mAffectedBones);
+                stream.ReadStruct(mAffectedBones);
 
                 mMotionsDataSize = stream.ReadTyped<uint32_t>();
                 mMotionsOffsetsSize = stream.ReadTyped<uint32_t>();
@@ -177,13 +170,8 @@ float MetroMotion::GetMotionTimeInSeconds() const {
 
 bool MetroMotion::IsBoneAnimated(const size_t boneIdx) const {
     const MotionDataHeader* hdr = rcast<const MotionDataHeader*>(mMotionsData.data());
-    bool bonePresent;
 
-    if(mVersion == kMVersionRedux)
-        bonePresent = mAffectedBones_Redux.IsPresent(boneIdx);
-    else
-        bonePresent = mAffectedBones.IsPresent(boneIdx);
-
+    const bool bonePresent = mAffectedBones.IsPresent(boneIdx);
     const bool motionHasThisBone = hdr->bonesMask.IsPresent(boneIdx);
 
     return bonePresent && motionHasThisBone;
@@ -302,39 +290,16 @@ bool MetroMotion::LoadInternal() {
         const MotionDataHeader* hdr = rcast<const MotionDataHeader*>(ptr);
         const uint32_t* offsetsTable = rcast<const uint32_t*>(ptr + sizeof(MotionDataHeader));
 
-        if (mVersion == kMVersionRedux) {
-            offsetsTable -= 4;
-        }
-
         mBonesRotations.resize(mNumBones);
         mBonesPositions.resize(mNumBones);
 
-        //TODO: Check game version instead of motion version. Haven't seen exodus use 0xf motion, but v5.2 seems to check seperately
-        int stride = (mVersion == kMVersionRedux) ? 3 : 2;
-
         for (size_t boneIdx = 0, flatIdx = 0; boneIdx < mNumBones; ++boneIdx) {
-            bool bonePresent;
-            if(mVersion == kMVersionRedux)
-                bonePresent = mAffectedBones_Redux.IsPresent(boneIdx);
-            else
-                bonePresent = mAffectedBones.IsPresent(boneIdx);
-
+            const bool bonePresent = mAffectedBones.IsPresent(boneIdx);
             const bool motionHasThisBone = hdr->bonesMask.IsPresent(boneIdx);
 
             if (bonePresent && motionHasThisBone) {
-                size_t offsetQ = offsetsTable[flatIdx * stride + 0];
-                size_t offsetT = offsetsTable[flatIdx * stride + 1];
-
-                size_t offsetS = offsetsTable[flatIdx * stride + 2]; //Redux only
-
-                //TODO: implement scale for redux
-
-                if (offsetQ > mMotionsData.size()){
-                    offsetQ = _byteswap_ulong(offsetQ);
-                }
-                if (offsetT > mMotionsData.size()) {
-                    offsetT = _byteswap_ulong(offsetT);
-                }
+                const size_t offsetQ = offsetsTable[flatIdx * 3 + 0];
+                const size_t offsetT = offsetsTable[flatIdx * 3 + 1];
 
                 this->ReadAttributeCurve(ptr + offsetQ, mBonesRotations[boneIdx], 4);
                 this->ReadAttributeCurve(ptr + offsetT, mBonesPositions[boneIdx], 3);
@@ -350,10 +315,7 @@ bool MetroMotion::LoadInternal() {
 }
 
 void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& curve, const size_t attribSize) {
-    uint32_t curveHeader = *rcast<const uint32_t*>(curveData);
-
-    if (mVersion == kMVersionRedux)
-        curveHeader = _byteswap_ulong(curveHeader);
+    const uint32_t curveHeader = *rcast<const uint32_t*>(curveData);
 
     const size_t numPoints = scast<size_t>(curveHeader & 0xFFFF);
     const AttribCurveType ctype = scast<AttribCurveType>((curveHeader >> 16) & 0xF);
@@ -393,26 +355,11 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
             } break;
 
             case AttribCurveType::CompressedPos: {
-
-                float timingScale = *rcast<const float*>(curveData);
-                if (mVersion == kMVersionRedux)
-                    timingScale = FloatByteSwap(timingScale);
-
-                timingScale = 1.0f / timingScale;
-
+                const float timingScale = 1.0f / *rcast<const float*>(curveData);
                 curveData += 4;
 
-                vec3 scale = rcast<const vec3*>(curveData)[0];
-                vec3 offset = rcast<const vec3*>(curveData)[1];
-
-                if (mVersion == kMVersionRedux) {
-                    scale.x = FloatByteSwap(scale.x);
-                    scale.y = FloatByteSwap(scale.y);
-                    scale.z = FloatByteSwap(scale.z);
-                    offset.x = FloatByteSwap(offset.x);
-                    offset.y = FloatByteSwap(offset.y);
-                    offset.z = FloatByteSwap(offset.z);
-                }
+                const vec3 scale = rcast<const vec3*>(curveData)[0];
+                const vec3 offset = rcast<const vec3*>(curveData)[1];
                 curveData += sizeof(vec3[2]);
 
                 const uint16_t* timingsPtr = rcast<const uint16_t*>(curveData);
@@ -436,12 +383,7 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                 const float normFactor = 0.0000215805f;
                 //const float normFactor = 1.0f / (65535.0f / sqrt(2.0f));
 
-                float timingScale = *rcast<const float*>(curveData);
-                if (mVersion == kMVersionRedux)
-                    timingScale = FloatByteSwap(timingScale);
-
-                timingScale = 1.0f / timingScale;
-
+                const float timingScale = 1.0f / *rcast<const float*>(curveData);
                 curveData += 4;
 
                 const uint16_t* timingsPtr = rcast<const uint16_t*>(curveData);

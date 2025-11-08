@@ -88,13 +88,6 @@ namespace std {
     };
 }
 
-inline float FloatByteSwap(float value) {
-    uint32_t bits;
-    std::memcpy(&bits, &value, sizeof(bits));
-    bits = _byteswap_ulong(bits);
-    std::memcpy(&value, &bits, sizeof(value));
-    return value;
-}
 
 inline bool StrEndsWith(const CharString& str, const CharString& ending) {
     return str.size() >= ending.size() && str.compare(str.size() - ending.size(), ending.size(), ending) == 0;
@@ -354,25 +347,6 @@ struct Bitset256 {
     }
 } PACKED_STRUCT_END;
 
-PACKED_STRUCT_BEGIN
-struct Bitset128 {
-    uint32_t dwords[4];
-
-    inline size_t CountOnes() const {
-        size_t result = 0;
-        for (uint32_t x : dwords) {
-            result += CountBitsU32(x);
-        }
-        return result;
-    }
-
-    inline bool IsPresent(const size_t idx) const {
-        const size_t i = idx >> 5;
-        assert(i <= 3);
-        const uint32_t mask = 1 << (idx & 0x1F);
-        return (dwords[i] & mask) == mask;
-    }
-} PACKED_STRUCT_END;
 
 #ifndef MySafeRelease
 #define MySafeRelease(ptr)  \
