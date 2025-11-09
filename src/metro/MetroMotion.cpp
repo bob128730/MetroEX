@@ -1,13 +1,26 @@
 #include "MetroMotion.h"
 
 PACKED_STRUCT_BEGIN
-struct MotionDataHeader {   // size = 48 bytes
+struct MotionDataHeader_Exodus {   // size = 48 bytes
     Bitset256   bonesMask;
     uint16_t    numLocators;
     uint16_t    numXforms;
     uint32_t    totalSize;
     uint64_t    unknown_0;
 } PACKED_STRUCT_END;
+
+struct MotionDataHeader_Redux {   // size = 34 bytes
+    Bitset128   bonesMask;
+    uint16_t    numLocators;
+    uint16_t    numXforms;
+    uint32_t    totalSize;
+    uint64_t    unknown_0;
+} PACKED_STRUCT_END;
+
+union MotionDataHeader {
+    MotionDataHeader_Exodus *Exodus;
+    MotionDataHeader_Redux *Redux;
+};
 
 enum MotionChunks {
     MC_HeaderChunk  = 0x00000000,
@@ -39,6 +52,28 @@ MetroMotion::MetroMotion(const CharString& name)
 }
 MetroMotion::~MetroMotion() {
 
+}
+
+MotionDataHeader ReadMotionDataHeader(int version, const uint8_t *data) {
+    if (version == 0xF) {
+        MotionDataHeader hdr;
+        hdr.Redux = new MotionDataHeader_Redux;
+        std::memcpy(hdr.Redux, data, sizeof(MotionDataHeader_Redux));
+
+        for (int i = 0; i < 4; i++) {
+            hdr.Redux->bonesMask.dwords[i] = _byteswap_ulong(hdr.Redux->bonesMask.dwords[i]);
+        }
+        hdr.Redux->numLocators = _byteswap_ushort(hdr.Redux->numLocators);
+        hdr.Redux->numXforms = _byteswap_ushort(hdr.Redux->numXforms);
+        hdr.Redux->totalSize = _byteswap_ulong(hdr.Redux->totalSize);
+        return hdr;
+    }
+    else {
+        MotionDataHeader hdr;
+        hdr.Exodus = new MotionDataHeader_Exodus;
+        std::memcpy(hdr.Redux, data, sizeof(MotionDataHeader_Exodus));
+        return hdr;
+    }
 }
 
 bool MetroMotion::LoadHeader(MemStream& stream) {
@@ -78,7 +113,10 @@ bool MetroMotion::LoadHeader(MemStream& stream) {
                 mMotionsDataSize = stream.ReadTyped<uint32_t>();
                 mMotionsOffsetsSize = stream.ReadTyped<uint32_t>();
 
-                stream.ReadStruct(mHighQualityBones);
+                if (mVersion == kMVersionRedux)
+                    stream.ReadStruct(mHighQualityBones_Redux);
+                else
+                    stream.ReadStruct(mHighQualityBones);
 
                 ++chunksFound;
             } break;
@@ -127,7 +165,10 @@ bool MetroMotion::LoadFromData(MemStream& stream) {
                 mMotionsDataSize = stream.ReadTyped<uint32_t>();
                 mMotionsOffsetsSize = stream.ReadTyped<uint32_t>();
 
-                stream.ReadStruct(mHighQualityBones);
+                if (mVersion == kMVersionRedux)
+                    stream.ReadStruct(mHighQualityBones_Redux);
+                else
+                    stream.ReadStruct(mHighQualityBones);
             } break;
 
             case MC_DataChunk: {
@@ -176,15 +217,18 @@ float MetroMotion::GetMotionTimeInSeconds() const {
 }
 
 bool MetroMotion::IsBoneAnimated(const size_t boneIdx) const {
-    const MotionDataHeader* hdr = rcast<const MotionDataHeader*>(mMotionsData.data());
+    MotionDataHeader hdr = ReadMotionDataHeader(mVersion, mMotionsData.data());
     bool bonePresent;
+    bool motionHasThisBone;
 
-    if(mVersion == kMVersionRedux)
+    if (mVersion == kMVersionRedux) {
         bonePresent = mAffectedBones_Redux.IsPresent(boneIdx);
-    else
+        motionHasThisBone = hdr.Redux->bonesMask.IsPresent(boneIdx);
+    }
+    else {
         bonePresent = mAffectedBones.IsPresent(boneIdx);
-
-    const bool motionHasThisBone = hdr->bonesMask.IsPresent(boneIdx);
+        motionHasThisBone = hdr.Exodus->bonesMask.IsPresent(boneIdx);
+    }
 
     return bonePresent && motionHasThisBone;
 }
@@ -279,6 +323,55 @@ vec3 MetroMotion::GetBonePosition(const size_t boneIdx, const size_t key) const 
     return result;
 }
 
+vec3 MetroMotion::GetBoneScale(const size_t boneIdx, const size_t key) const {
+    vec3 result(0.0f);
+
+    const AttributeCurve& curve = mBonesScales[boneIdx];
+    if (!curve.points.empty()) {
+        if (curve.points.size() == 1) { // constant value
+            result = *rcast<const vec3*>(&curve.points.front().value);
+        }
+        else {
+            const float timing = scast<float>(key) / scast<float>(kFrameRate);
+
+            const size_t numPoints = curve.points.size();
+            size_t pointA = numPoints, pointB = numPoints;
+            for (size_t i = 0; i < numPoints; ++i) {
+                const auto& p = curve.points[i];
+                if (p.time >= timing) {
+                    pointB = i;
+                    break;
+                }
+            }
+
+            if (pointB == numPoints) {
+                pointB--;
+                pointA = pointB;
+            }
+            else if (pointB == 0) {
+                pointA = 0;
+            }
+            else {
+                pointA = pointB - 1;
+            }
+
+            const auto& pA = curve.points[pointA];
+
+            if (pointA == pointB) {
+                result = pA.value;
+            }
+            else {
+                const auto& pB = curve.points[pointB];
+                const float t = (timing - pA.time) / (pB.time - pA.time);
+
+                result = Lerp(*rcast<const vec3*>(&pA.value), *rcast<const vec3*>(&pB.value), t);
+            }
+        }
+    }
+
+    return result;
+}
+
 
 
 enum class AttribCurveType : uint8_t {
@@ -297,29 +390,35 @@ bool MetroMotion::LoadInternal() {
     bool result = false;
 
     if (!mMotionsData.empty() && mMotionsData.size() > mMotionsOffsetsSize) {
-        const uint8_t* ptr = mMotionsData.data();
+        uint8_t* ptr = mMotionsData.data();
 
-        const MotionDataHeader* hdr = rcast<const MotionDataHeader*>(ptr);
-        const uint32_t* offsetsTable = rcast<const uint32_t*>(ptr + sizeof(MotionDataHeader));
+        MotionDataHeader hdr = ReadMotionDataHeader(mVersion, mMotionsData.data());
+        uint32_t* offsetsTable;
 
         if (mVersion == kMVersionRedux) {
-            offsetsTable -= 4;
+            mBonesScales.resize(mNumBones);
+            offsetsTable = rcast<uint32_t*>(ptr + sizeof(MotionDataHeader_Redux));
+        }
+        else {
+            offsetsTable = rcast<uint32_t*>(ptr + sizeof(MotionDataHeader_Exodus));
         }
 
         mBonesRotations.resize(mNumBones);
         mBonesPositions.resize(mNumBones);
 
-        //TODO: Check game version instead of motion version. Haven't seen exodus use 0xf motion, but v5.2 seems to check seperately
         int stride = (mVersion == kMVersionRedux) ? 3 : 2;
 
         for (size_t boneIdx = 0, flatIdx = 0; boneIdx < mNumBones; ++boneIdx) {
             bool bonePresent;
-            if(mVersion == kMVersionRedux)
+            bool motionHasThisBone;
+            if (mVersion == kMVersionRedux) {
                 bonePresent = mAffectedBones_Redux.IsPresent(boneIdx);
-            else
+                motionHasThisBone = hdr.Redux->bonesMask.IsPresent(boneIdx);
+            }
+            else {
                 bonePresent = mAffectedBones.IsPresent(boneIdx);
-
-            const bool motionHasThisBone = hdr->bonesMask.IsPresent(boneIdx);
+                motionHasThisBone = hdr.Exodus->bonesMask.IsPresent(boneIdx);
+            }
 
             if (bonePresent && motionHasThisBone) {
                 size_t offsetQ = offsetsTable[flatIdx * stride + 0];
@@ -327,18 +426,21 @@ bool MetroMotion::LoadInternal() {
 
                 size_t offsetS = offsetsTable[flatIdx * stride + 2]; //Redux only
 
-                //TODO: implement scale for redux
-
                 if (offsetQ > mMotionsData.size()){
                     offsetQ = _byteswap_ulong(offsetQ);
                 }
                 if (offsetT > mMotionsData.size()) {
                     offsetT = _byteswap_ulong(offsetT);
                 }
+                if (offsetS > mMotionsData.size()) {
+                    offsetS = _byteswap_ulong(offsetS);
+                }
 
                 this->ReadAttributeCurve(ptr + offsetQ, mBonesRotations[boneIdx], 4);
                 this->ReadAttributeCurve(ptr + offsetT, mBonesPositions[boneIdx], 3);
 
+                if(mVersion == kMVersionRedux)
+                    this->ReadAttributeCurve(ptr + offsetS, mBonesScales[boneIdx], 3);
                 ++flatIdx;
             }
         }
@@ -370,7 +472,16 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
         p.time = 0.0f;
         memcpy(&p.value, curveData, attribSize * sizeof(float));
 
+        if (mVersion == kMVersionRedux) {
+            p.value.x = FloatByteSwap(p.value.x);
+            p.value.y = FloatByteSwap(p.value.y);
+            p.value.z = FloatByteSwap(p.value.z);
+            p.value.w = FloatByteSwap(p.value.w);
+        }
+
         p.value = MetroSwizzle(p.value);
+        if (true)
+            p.value = p.value;
     } else if (ctype == AttribCurveType::Unknown_3 || ctype == AttribCurveType::Unknown_6) {
         assert(false);
     } else {
@@ -384,6 +495,13 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                 for (auto& p : curve.points) {
                     p.time = *timingsPtr;
                     memcpy(&p.value, valuesPtr, attribSize * sizeof(float));
+
+                    if (mVersion == kMVersionRedux) {
+                        p.value.x = FloatByteSwap(p.value.x);
+                        p.value.y = FloatByteSwap(p.value.y);
+                        p.value.z = FloatByteSwap(p.value.z);
+                        p.value.w = FloatByteSwap(p.value.w);
+                    }
 
                     p.value = MetroSwizzle(p.value);
 
@@ -419,11 +537,23 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                 const uint16_t* valuesPtr = rcast<const uint16_t*>(curveData + (numPoints * sizeof(uint16_t)));
 
                 for (auto& p : curve.points) {
-                    p.time = scast<float>(*timingsPtr) * timingScale;
+                    uint16_t time = *timingsPtr;
 
-                    p.value.x = scast<float>(valuesPtr[0]) * scale.x + offset.x;
-                    p.value.y = scast<float>(valuesPtr[1]) * scale.y + offset.y;
-                    p.value.z = scast<float>(valuesPtr[2]) * scale.z + offset.z;
+                    int16_t x = valuesPtr[0];
+                    int16_t y = valuesPtr[1];
+                    int16_t z = valuesPtr[2];
+
+                    if (mVersion == kMVersionRedux) {
+                        time = _byteswap_ushort(time);
+                        x = _byteswap_ushort(x);
+                        y = _byteswap_ushort(y);
+                        z = _byteswap_ushort(z);
+                    }
+                    
+                    p.time = time * timingScale;
+                    p.value.x = x * scale.x + offset.x;
+                    p.value.y = y * scale.y + offset.y;
+                    p.value.z = z * scale.z + offset.z;
 
                     p.value = MetroSwizzle(p.value);
 
@@ -448,14 +578,28 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                 const int16_t* valuesPtr = rcast<const int16_t*>(curveData + (numPoints * sizeof(uint16_t)));
 
                 for (auto& p : curve.points) {
-                    p.time = scast<float>(*timingsPtr) * timingScale;
+                    uint16_t time = *timingsPtr;
 
-                    const int permutation = (valuesPtr[1] & 1) | (2 * (valuesPtr[0] & 1));
-                    const int wsign = (valuesPtr[2] & 1);
+                    int16_t qx_val = valuesPtr[0];
+                    int16_t qy_val = valuesPtr[1];
+                    int16_t qz_val = valuesPtr[2];
 
-                    const float qx = scast<float>(valuesPtr[0]) * normFactor;
-                    const float qy = scast<float>(valuesPtr[1]) * normFactor;
-                    const float qz = scast<float>(valuesPtr[2]) * normFactor;
+
+                    if (mVersion == kMVersionRedux) {
+                        time = _byteswap_ushort(time);
+                        qx_val = _byteswap_ushort(qx_val);
+                        qy_val = _byteswap_ushort(qy_val);
+                        qz_val = _byteswap_ushort(qz_val);
+                    }
+
+                    const int permutation = (qy_val & 1) | (2 * (qx_val & 1));
+                    const int wsign = (qz_val & 1);
+
+                    p.time = time * timingScale;
+                    float qx = qx_val * normFactor;
+                    float qy = qy_val * normFactor;
+                    float qz = qz_val * normFactor;
+
                     const float t = 1.0f - (qx * qx) - (qy * qy) - (qz * qz);
                     const float qw = (t < 0.0f) ? 0.0f : (wsign ? -std::sqrtf(t) : std::sqrtf(t));
 

@@ -32,6 +32,7 @@ public:
     bool                    IsBoneAnimated(const size_t boneIdx) const;
     quat                    GetBoneRotation(const size_t boneIdx, const size_t key) const;
     vec3                    GetBonePosition(const size_t boneIdx, const size_t key) const;
+    vec3                    GetBoneScale(const size_t boneIdx, const size_t key) const;
 
 //private:
     bool                    LoadInternal();
@@ -58,9 +59,11 @@ public:
     size_t                  mMotionsDataSize;
     size_t                  mMotionsOffsetsSize;
     Bitset256               mHighQualityBones;
+    Bitset128               mHighQualityBones_Redux;
     // data
     BytesArray              mMotionsData;
     // curves
     MyArray<AttributeCurve> mBonesRotations;
     MyArray<AttributeCurve> mBonesPositions;
+    MyArray<AttributeCurve> mBonesScales;
 };

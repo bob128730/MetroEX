@@ -733,10 +733,22 @@ namespace MetroEX {
 
                 quat q = mCurrentMotion->GetBoneRotation(b.idx, key);
                 vec3 t = mCurrentMotion->GetBonePosition(b.idx, key);
+                vec3 s = mCurrentMotion->GetBoneScale(b.idx, key);
 
                 mat4& m = mConstantBufferData->bones[b.idx];
 
                 m = MatFromQuat(q);
+                
+                //TODO: Find out if this is the right way to apply scale
+                if (mCurrentMotion->mVersion == mCurrentMotion->kMVersionRedux) {
+                    if(s.x > 0.0f)
+                        m[0] *= s.x;
+                    if(s.y > 0.0f)
+                        m[1] *= s.y;
+                    if(s.z > 0.0f)
+                        m[2] *= s.z;
+                }
+
                 m[3] = vec4(t, 1.0f);
 
                 if (b.parentIdx != MetroBone::InvalidIdx) {
