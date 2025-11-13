@@ -1,13 +1,10 @@
 #include "MetroFileSystem.h"
 #include "MetroCompression.h"
+#include "MetroTypes.h"
 #include "VFXReader.h"
 #include <fstream>
 
-static const uint32_t kVFXVersionUnknown = 0;
-static const uint32_t kVFXVersion2033Redux = 1;
-static const uint32_t kVFXVersionArktika1 = 2;
-static const uint32_t kVFXVersionExodus = 3;
-static const uint32_t kVFXVersionMax = 4;
+
 
 static const CharString sGameVersions[] = {
     "Unknown",
@@ -112,6 +109,10 @@ const CharString& MetroFileSystem::GetName(const MyHandle entry) const {
     } else {
         return kEmptyString;
     }
+}
+
+const size_t MetroFileSystem::GetGameVersion() const {
+    return mGameVersion;
 }
 
 CharString MetroFileSystem::GetFullPath(const MyHandle entry) const {
@@ -353,6 +354,7 @@ bool MetroFileSystem::AddVFX(const fs::path& vfxPath) {
         VFXReader* vfxReader = new VFXReader();
         if (vfxReader->LoadFromFile(vfxPath)) {
             mCurrentVfxIdx = mLoadedVFX.size();
+            mGameVersion = vfxReader->GetVersion();
 
             const MetroFile& rootDir = vfxReader->GetRootFolder();
             this->MergeFolderRecursive(this->GetRootFolder(), rootDir, *vfxReader);

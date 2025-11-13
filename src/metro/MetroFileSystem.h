@@ -33,6 +33,7 @@ public:
     bool                    IsFolder(const MyHandle entry) const;
     bool                    IsFile(const MyHandle entry) const;
     const CharString&       GetName(const MyHandle entry) const;
+    const size_t            GetGameVersion() const;
     CharString              GetFullPath(const MyHandle entry) const;
     size_t                  GetCompressedSize(const MyHandle entry) const;
     size_t                  GetUncompressedSize(const MyHandle entry) const;
@@ -62,4 +63,5 @@ private:
     MyArray<VFXReader*>     mLoadedVFX;
     MyArray<MetroFSEntry>   mEntries;
     size_t                  mCurrentVfxIdx;
+    size_t                  mGameVersion;
 };

@@ -1,5 +1,6 @@
 #include "VFXReader.h"
 #include "MetroCompression.h"
+#include "MetroTypes.h"
 
 #include <fstream>
 

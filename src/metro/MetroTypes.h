@@ -2,6 +2,12 @@
 #include "mycommon.h"
 #include "mymath.h"
 
+static const size_t kVFXVersionUnknown = 0;
+static const size_t kVFXVersion2033Redux = 1;
+static const size_t kVFXVersionArktika1 = 2;
+static const size_t kVFXVersionExodus = 3;
+static const size_t kVFXVersionMax = 4;
+
 PACKED_STRUCT_BEGIN
 struct MetroGuid {  // 16 bytes
     uint32_t    a;
@@ -107,6 +113,13 @@ struct MetroVertex {
     vec2        uv1;
 } PACKED_STRUCT_END;
 
+PACKED_STRUCT_BEGIN
+struct MetroOBB {           // size = 60
+    mat3    matrix;
+    vec3    offset;
+    vec3    hsize;
+} PACKED_STRUCT_END;
+
 struct MetroMesh {
     size_t               version;
     bool                 skinned;
@@ -114,6 +127,7 @@ struct MetroMesh {
     size_t               flags;
     float                vscale;
     AABBox               bbox;
+    MyArray<MetroOBB>    obbs;
     size_t               type;
     size_t               shaderId;
     StringArray          materials;

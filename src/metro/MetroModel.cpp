@@ -65,15 +65,6 @@ struct MdlHeader {          // size = 64
     float       texelDensity;
 } PACKED_STRUCT_END;
 
-PACKED_STRUCT_BEGIN
-struct MetroOBB {           // size = 60
-    mat3    matrix;
-    vec3    offset;
-    vec3    hsize;
-} PACKED_STRUCT_END;
-
-
-
 MetroModel::MetroModel()
     : mSkeleton(nullptr)
     , mCurrentMesh(nullptr)
@@ -801,10 +792,13 @@ static void RemapBones(MetroVertex& v, const BytesArray& remap) {
 }
 
 void MetroModel::ReadSubChunks(MemStream& stream) {
+
+    LogPrintF(LogLevel::Info, "Starting read model subchunks:");
     while (!stream.Ended()) {
         const size_t chunkId = stream.ReadTyped<uint32_t>();
         const size_t chunkSize = stream.ReadTyped<uint32_t>();
         const size_t chunkEnd = stream.GetCursor() + chunkSize;
+        LogPrintF(LogLevel::Info, "%i", chunkId);
 
         switch (chunkId) {
             case MC_HeaderChunk: {
@@ -850,6 +844,7 @@ void MetroModel::ReadSubChunks(MemStream& stream) {
                 const CharString& textureName = mCurrentMesh->materials[0];
                 const CharString& shaderName = mCurrentMesh->materials[1];
                 const CharString& srcMatName = mCurrentMesh->materials[3];
+
                 if (StrEndsWith(textureName, "invalid") ||
                     StrContains(shaderName, "invisible") ||
                     StrContains(srcMatName, "collision") ||
@@ -881,6 +876,27 @@ void MetroModel::ReadSubChunks(MemStream& stream) {
                 }
             } break;
 
+            case MC_FacesChunk: {
+                if (mCurrentMesh) {
+                    size_t numFaces = 0, numShadowFaces = 0;
+
+                    if (!mCurrentMesh->skinned) {
+                        numFaces = stream.ReadTyped<uint32_t>();
+                        if (mCurrentMesh->version >= kModelVersionArktika1) {
+                            numShadowFaces = stream.ReadTyped<uint16_t>();
+                        } else {
+                            numFaces /= 3;  //#NOTE_SK: Redux models store number of indices, not faces
+                        }
+                    } else {
+                        numFaces = stream.ReadTyped<uint16_t>();
+                        numShadowFaces = stream.ReadTyped<uint16_t>();
+                    }
+
+                    mCurrentMesh->faces.resize(numFaces);
+                    stream.ReadToBuffer(mCurrentMesh->faces.data(), numFaces * sizeof(MetroFace));
+                }
+            } break;
+
             case MC_SkinnedVerticesChunk: {
                 if (mCurrentMesh) {
                     mCurrentMesh->skinned = true;
@@ -890,9 +906,11 @@ void MetroModel::ReadSubChunks(MemStream& stream) {
                     mCurrentMesh->bonesRemap.resize(numBones);
                     stream.ReadToBuffer(mCurrentMesh->bonesRemap.data(), numBones);
 
-                    //std::vector<MetroOBB> obbs(numBones);
-                    //stream.ReadToBuffer(obbs.data(), obbs.size() * sizeof(MetroOBB));
-                    stream.SkipBytes(numBones * sizeof(MetroOBB));
+                    //TODO: actually use this
+                    mCurrentMesh->obbs.resize(numBones);
+                    stream.ReadToBuffer(mCurrentMesh->obbs.data(), numBones * sizeof(MetroOBB));
+
+                    //stream.SkipBytes(numBones * sizeof(MetroOBB));
 
                     size_t numVertices = 0, numShadowVertices = 0;
 
@@ -916,27 +934,6 @@ void MetroModel::ReadSubChunks(MemStream& stream) {
                         ++srcVerts;
                         ++dstVerts;
                     }
-                }
-            } break;
-
-            case MC_FacesChunk: {
-                if (mCurrentMesh) {
-                    size_t numFaces = 0, numShadowFaces = 0;
-
-                    if (!mCurrentMesh->skinned) {
-                        numFaces = stream.ReadTyped<uint32_t>();
-                        if (mCurrentMesh->version >= kModelVersionArktika1) {
-                            numShadowFaces = stream.ReadTyped<uint16_t>();
-                        } else {
-                            numFaces /= 3;  //#NOTE_SK: Redux models store number of indices, not faces
-                        }
-                    } else {
-                        numFaces = stream.ReadTyped<uint16_t>();
-                        numShadowFaces = stream.ReadTyped<uint16_t>();
-                    }
-
-                    mCurrentMesh->faces.resize(numFaces);
-                    stream.ReadToBuffer(mCurrentMesh->faces.data(), numFaces * sizeof(MetroFace));
                 }
             } break;
 

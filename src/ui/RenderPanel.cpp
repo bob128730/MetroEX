@@ -577,8 +577,12 @@ namespace MetroEX {
                     MyHandle textureFile = mfs.FindFile(texturePathBest);
 
                     if (textureFile == kInvalidHandle) {
-                        texturePathBest = texturePath + ".bin";
+                        texturePathBest += "c";
                         textureFile = mfs.FindFile(texturePathBest);
+                        if (textureFile == kInvalidHandle) {
+                            texturePathBest = texturePath + ".bin";
+                            textureFile = mfs.FindFile(texturePathBest);
+                        }
                     }
 
                     if (textureFile != kInvalidHandle) {
@@ -594,7 +598,8 @@ namespace MetroEX {
                             }
                         }
                     }
-                } else {
+                }
+                else {
                     rg->texture = rcast<RenderTexture*>(mModelTextures[texNameManaged].ToPointer());
                 }
             }

@@ -9,11 +9,6 @@ struct Package {
 
 class VFXReader {
 public:
-    static const size_t kVFXVersionUnknown      = 0;
-    static const size_t kVFXVersion2033Redux    = 1;
-    static const size_t kVFXVersionArktika1     = 2;
-    static const size_t kVFXVersionExodus       = 3;
-    static const size_t kVFXVersionMax          = 4;
 
     IMPL_SINGLETON(VFXReader)
 
