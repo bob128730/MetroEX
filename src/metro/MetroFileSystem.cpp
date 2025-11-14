@@ -42,8 +42,12 @@ bool MetroFileSystem::InitFromGameFolder(const fs::path& gameFolder) {
         LogPrint(LogLevel::Info, "Adding (" + s + ") to FS");
 
         fs::path vfxPath = gameFolder / s;
-        result = this->AddVFX(vfxPath);
-        if (!result) {
+        bool added = this->AddVFX(vfxPath);
+
+        if (s == "content.vfx")
+            result = added; 
+
+        if (!added) {
             LogPrint(LogLevel::Info, "Failed to add (" + s + ") to FS");
             break;
         }
