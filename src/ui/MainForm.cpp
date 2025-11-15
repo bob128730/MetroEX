@@ -1308,7 +1308,7 @@ namespace MetroEX {
                         for (size_t i = 0; i < mdl.GetNumMeshes(); ++i) {
                             const MetroMesh* mesh = mdl.GetMesh(i);
                             if (!mesh->materials.empty()) {
-                                const CharString& textureName = mesh->materials.front();
+                                const HashString& textureName = mesh->materials.front();
 
                                 if (settings.extraction.modelSaveSurfaceSet) {
                                     MetroSurfaceDescription surface = MetroTexturesDatabase::Get().GetSurfaceSet(textureName);
