@@ -36,7 +36,7 @@ public:
 
 //private:
     bool                    LoadInternal();
-    void                    ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& curve, const size_t attribSize);
+    void                    ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& curve, const size_t attribSize, bool disableBSwap);
 
 //private:
     CharString              mName;

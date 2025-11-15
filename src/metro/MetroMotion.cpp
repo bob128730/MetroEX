@@ -426,21 +426,23 @@ bool MetroMotion::LoadInternal() {
 
                 size_t offsetS = offsetsTable[flatIdx * stride + 2]; //Redux only
 
+                bool disableBSwap = true;
+
                 if (offsetQ > mMotionsData.size()){
-                    offsetQ = _byteswap_ulong(offsetQ);
+                    offsetQ = _byteswap_ulong(offsetQ); disableBSwap = false;
                 }
                 if (offsetT > mMotionsData.size()) {
-                    offsetT = _byteswap_ulong(offsetT);
+                    offsetT = _byteswap_ulong(offsetT); disableBSwap = false;
                 }
                 if (offsetS > mMotionsData.size()) {
-                    offsetS = _byteswap_ulong(offsetS);
+                    offsetS = _byteswap_ulong(offsetS); disableBSwap = false;
                 }
 
-                this->ReadAttributeCurve(ptr + offsetQ, mBonesRotations[boneIdx], 4);
-                this->ReadAttributeCurve(ptr + offsetT, mBonesPositions[boneIdx], 3);
+                this->ReadAttributeCurve(ptr + offsetQ, mBonesRotations[boneIdx], 4, disableBSwap);
+                this->ReadAttributeCurve(ptr + offsetT, mBonesPositions[boneIdx], 3, disableBSwap);
 
                 if(mVersion == kMVersionRedux)
-                    this->ReadAttributeCurve(ptr + offsetS, mBonesScales[boneIdx], 3);
+                    this->ReadAttributeCurve(ptr + offsetS, mBonesScales[boneIdx], 3, disableBSwap);
                 ++flatIdx;
             }
         }
@@ -451,10 +453,10 @@ bool MetroMotion::LoadInternal() {
     return result;
 }
 
-void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& curve, const size_t attribSize) {
+void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& curve, const size_t attribSize, bool disableBSwap) {
     uint32_t curveHeader = *rcast<const uint32_t*>(curveData);
 
-    if (mVersion == kMVersionRedux)
+    if (mVersion == kMVersionRedux && !disableBSwap)
         curveHeader = _byteswap_ulong(curveHeader);
 
     const size_t numPoints = scast<size_t>(curveHeader & 0xFFFF);
@@ -472,7 +474,7 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
         p.time = 0.0f;
         memcpy(&p.value, curveData, attribSize * sizeof(float));
 
-        if (mVersion == kMVersionRedux) {
+        if (mVersion == kMVersionRedux && !disableBSwap) {
             p.value.x = FloatByteSwap(p.value.x);
             p.value.y = FloatByteSwap(p.value.y);
             p.value.z = FloatByteSwap(p.value.z);
@@ -480,8 +482,7 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
         }
 
         p.value = MetroSwizzle(p.value);
-        if (true)
-            p.value = p.value;
+
     } else if (ctype == AttribCurveType::Unknown_3 || ctype == AttribCurveType::Unknown_6) {
         assert(false);
     } else {
@@ -494,6 +495,10 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
 
                 for (auto& p : curve.points) {
                     p.time = *timingsPtr;
+
+                    if (mVersion == kMVersionRedux && !disableBSwap)
+                        p.time = FloatByteSwap(p.time);
+
                     memcpy(&p.value, valuesPtr, attribSize * sizeof(float));
 
                     if (mVersion == kMVersionRedux) {
@@ -513,7 +518,7 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
             case AttribCurveType::CompressedPos: {
 
                 float timingScale = *rcast<const float*>(curveData);
-                if (mVersion == kMVersionRedux)
+                if (mVersion == kMVersionRedux && !disableBSwap)
                     timingScale = FloatByteSwap(timingScale);
 
                 timingScale = 1.0f / timingScale;
@@ -523,7 +528,7 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                 vec3 scale = rcast<const vec3*>(curveData)[0];
                 vec3 offset = rcast<const vec3*>(curveData)[1];
 
-                if (mVersion == kMVersionRedux) {
+                if (mVersion == kMVersionRedux && !disableBSwap) {
                     scale.x = FloatByteSwap(scale.x);
                     scale.y = FloatByteSwap(scale.y);
                     scale.z = FloatByteSwap(scale.z);
@@ -543,7 +548,7 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                     int16_t y = valuesPtr[1];
                     int16_t z = valuesPtr[2];
 
-                    if (mVersion == kMVersionRedux) {
+                    if (mVersion == kMVersionRedux && !disableBSwap) {
                         time = _byteswap_ushort(time);
                         x = _byteswap_ushort(x);
                         y = _byteswap_ushort(y);
@@ -567,7 +572,7 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                 //const float normFactor = 1.0f / (65535.0f / sqrt(2.0f));
 
                 float timingScale = *rcast<const float*>(curveData);
-                if (mVersion == kMVersionRedux)
+                if (mVersion == kMVersionRedux && !disableBSwap)
                     timingScale = FloatByteSwap(timingScale);
 
                 timingScale = 1.0f / timingScale;
@@ -585,7 +590,7 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                     int16_t qz_val = valuesPtr[2];
 
 
-                    if (mVersion == kMVersionRedux) {
+                    if (mVersion == kMVersionRedux && !disableBSwap) {
                         time = _byteswap_ushort(time);
                         qx_val = _byteswap_ushort(qx_val);
                         qy_val = _byteswap_ushort(qy_val);
