@@ -442,7 +442,8 @@ bool MetroMotion::LoadInternal() {
                 this->ReadAttributeCurve(ptr + offsetT, mBonesPositions[boneIdx], 3, disableBSwap);
 
                 if(mVersion == kMVersionRedux)
-//                    this->ReadAttributeCurve(ptr + offsetS, mBonesScales[boneIdx], 3, disableBSwap);
+                    this->ReadAttributeCurve(ptr + offsetS, mBonesScales[boneIdx], 3, disableBSwap);
+
                 ++flatIdx;
             }
         }
