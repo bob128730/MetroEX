@@ -366,6 +366,19 @@ namespace MetroEX {
         UpdateNodeIcon(e->Node, eNodeEventType::Close);
     }
 
+    void MainForm::filterableTreeView_BeforeExpand(System::Object^ sender, System::Windows::Forms::TreeViewCancelEventArgs^ e) {
+        TreeNode^ node = e->Node;
+        FileTagData^ tag = safe_cast<FileTagData^>(node->Nodes[0]->Tag);
+        FileTagData^ parentTag = safe_cast<FileTagData^>(node->Tag);
+        MetroFileSystem& mfs = MetroFileSystem::Get();
+        const MyHandle configBinFile = mfs.FindFile("content\\config.bin");
+
+        if (tag->fileType == FileType::Stub) {
+            node->Nodes->Clear();
+            AddFolder(parentTag->fileHandle, node, configBinFile);
+        }
+    }
+
     void MainForm::filterableTreeView_AfterExpand(System::Object^, System::Windows::Forms::TreeViewEventArgs^ e) {
         TreeNode^ node = e->Node;
 
@@ -652,7 +665,7 @@ namespace MetroEX {
             const MyHandle rootDir = mfs.GetRootFolder();
             for (MyHandle child = mfs.GetFirstChild(rootDir); child != kInvalidHandle; child = mfs.GetNextChild(child)) {
                 if (mfs.IsFolder(child)) {
-                    this->AddFoldersRecursive(child, rootNode, configBinFile);
+                    this->AddFolder(child, rootNode, configBinFile);
                 } else {
                     const FileType fileType = DetectFileType(child);
                     TreeNode^ fileNode = rootNode->Nodes->Add(ToNetString(mfs.GetName(child)));
@@ -663,6 +676,53 @@ namespace MetroEX {
         }
 
         this->filterableTreeView->TreeView->EndUpdate();
+    }
+
+    void MainForm::AddFolder(MyHandle folder, TreeNode^ rootItem, const MyHandle configBinFile) {
+        MetroFileSystem& mfs = MetroFileSystem::Get();
+
+        TreeNode^ dirLeafNode = rootItem;
+
+        dirLeafNode->Tag = gcnew FileTagData(FileType::Folder, folder, kInvalidValue);
+        UpdateNodeIcon(dirLeafNode);
+
+        // Add files and folders inside
+        for (auto child = mfs.GetFirstChild(folder); child != kInvalidHandle; child = mfs.GetNextChild(child)) {
+            if (mfs.IsFolder(child)) {
+                // Add folder to list
+                this->AddFolderStub(child, dirLeafNode, configBinFile);
+            }
+            else {
+                // Add file to list
+                if (child == configBinFile) {
+                    // config.bin
+                    this->AddBinaryArchive(child, dirLeafNode);
+
+                }
+                else {
+                    //====> any other file
+                    const FileType fileType = DetectFileType(child);
+                    TreeNode^ fileNode = dirLeafNode->Nodes->Add(ToNetString(mfs.GetName(child)));
+                    fileNode->Tag = gcnew FileTagData(fileType, child, kInvalidValue);
+                    UpdateNodeIcon(fileNode);
+                }
+            }
+        }
+    }
+
+
+    void MainForm::AddFolderStub(MyHandle folder, TreeNode^ rootItem, const MyHandle configBinFile) {
+        MetroFileSystem& mfs = MetroFileSystem::Get();
+
+        // Add root folder
+        TreeNode^ dirLeafNode = rootItem->Nodes->Add(ToNetString(mfs.GetName(folder)));
+
+        dirLeafNode->Tag = gcnew FileTagData(FileType::Folder, folder, kInvalidValue);
+        UpdateNodeIcon(dirLeafNode);
+
+        TreeNode^ fileNode = dirLeafNode->Nodes->Add(ToNetString("MFS_STUB"));
+        fileNode->Tag = gcnew FileTagData(FileType::Stub, 0xFFFFFF, kInvalidValue);
+
     }
 
     void MainForm::AddFoldersRecursive(MyHandle folder, TreeNode^ rootItem, const MyHandle configBinFile) {

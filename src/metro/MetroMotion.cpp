@@ -442,7 +442,7 @@ bool MetroMotion::LoadInternal() {
                 this->ReadAttributeCurve(ptr + offsetT, mBonesPositions[boneIdx], 3, disableBSwap);
 
                 if(mVersion == kMVersionRedux)
-                    this->ReadAttributeCurve(ptr + offsetS, mBonesScales[boneIdx], 3, disableBSwap);
+//                    this->ReadAttributeCurve(ptr + offsetS, mBonesScales[boneIdx], 3, disableBSwap);
                 ++flatIdx;
             }
         }
@@ -544,9 +544,9 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                 for (auto& p : curve.points) {
                     uint16_t time = *timingsPtr;
 
-                    int16_t x = valuesPtr[0];
-                    int16_t y = valuesPtr[1];
-                    int16_t z = valuesPtr[2];
+                    uint16_t x = valuesPtr[0];
+                    uint16_t y = valuesPtr[1];
+                    uint16_t z = valuesPtr[2];
 
                     if (mVersion == kMVersionRedux && !disableBSwap) {
                         time = _byteswap_ushort(time);

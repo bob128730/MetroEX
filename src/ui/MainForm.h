@@ -26,7 +26,8 @@ namespace MetroEX {
         Motion,
         Level,
         Sound,
-        Localization
+        Localization,
+        Stub
     };
 
     enum class PanelType {
@@ -94,6 +95,7 @@ namespace MetroEX {
 
             this->filterableTreeView->TreeView->ImageList = this->imageListMain;
             this->filterableTreeView->TreeView->NodeMouseClick += (gcnew TreeNodeMouseClickEventHandler(this, &MainForm::filterableTreeView_NodeMouseClick));
+            this->filterableTreeView->TreeView->BeforeExpand += (gcnew TreeViewCancelEventHandler(this, &MainForm::filterableTreeView_BeforeExpand));
             this->filterableTreeView->TreeView->AfterCollapse += (gcnew TreeViewEventHandler(this, &MainForm::filterableTreeView_AfterCollapse));
             this->filterableTreeView->TreeView->AfterExpand += (gcnew TreeViewEventHandler(this, &MainForm::filterableTreeView_AfterExpand));
             this->filterableTreeView->TreeView->AfterSelect += (gcnew TreeViewEventHandler(this, &MainForm::filterableTreeView_AfterSelect));
@@ -824,6 +826,7 @@ private: System::Windows::Forms::ToolStripMenuItem^  saveSurfaceSetToolStripMenu
         void toolBtnMdlShowCollision_Click(System::Object^ sender, System::EventArgs^ e);
         void toolBtnMdlResetCamera_Click(System::Object^ sender, System::EventArgs^ e);
         // treeview
+        void filterableTreeView_BeforeExpand(System::Object^ sender, System::Windows::Forms::TreeViewCancelEventArgs^ e);
         void filterableTreeView_AfterSelect(System::Object^ sender, System::Windows::Forms::TreeViewEventArgs^ e);
         void filterableTreeView_AfterCollapse(System::Object^ sender, System::Windows::Forms::TreeViewEventArgs^ e);
         void filterableTreeView_AfterExpand(System::Object^ sender, System::Windows::Forms::TreeViewEventArgs^ e);
@@ -848,6 +851,8 @@ private: System::Windows::Forms::ToolStripMenuItem^  saveSurfaceSetToolStripMenu
 
     private:
         void UpdateFilesList();
+        void AddFolder(MyHandle folder, TreeNode^ rootItem, const MyHandle configBinFile);
+        void AddFolderStub(MyHandle folder, TreeNode^ rootItem, const MyHandle configBinFile);
         void AddFoldersRecursive(MyHandle folder, TreeNode^ rootItem, const MyHandle configBinFile);
         void AddBinaryArchive(MyHandle file, TreeNode^ rootItem);
         void DetectFileAndShow(MyHandle file);
