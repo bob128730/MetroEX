@@ -253,7 +253,7 @@ void CollectClusters(const MetroMesh* mesh, const MetroSkeleton* skeleton, MyArr
 
 //NOTE: Temporary workaround for incorrect scale. For some reason scene->GetGlobalSettings().SetSystemUnit(FbxSystemUnit::m); did not help
 static FbxVector4 MetroVecToFbxVec(const vec3& v) {
-    return FbxVector4(v.x*100, v.y*100, v.z*100);
+    return FbxVector4(v.x*100.0f, v.y*100.0f, v.z*100.0f);
 }
 
 static FbxVector4 MetroRotToFbxRot(const quat& q) {

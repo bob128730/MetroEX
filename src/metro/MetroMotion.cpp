@@ -570,7 +570,7 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
 
             case AttribCurveType::CompressedQuat: {
                 const float normFactor = 0.0000215805f;
-                //const float normFactor = 1.0f / (65535.0f / sqrt(2.0f));
+                //const double normFactor = 1.0 / (65535.0 / sqrt(2.0));
 
                 float timingScale = *rcast<const float*>(curveData);
                 if (mVersion == kMVersionRedux && !disableBSwap)
@@ -581,7 +581,10 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                 curveData += 4;
 
                 const uint16_t* timingsPtr = rcast<const uint16_t*>(curveData);
-                const int16_t* valuesPtr = rcast<const int16_t*>(curveData + (numPoints * sizeof(uint16_t)));
+                const int16_t* valuesPtr = rcast<const int16_t*>(curveData + (numPoints * sizeof(int16_t)));
+
+                int index = 0;
+                AttributeCurve::AttribPoint prevP;
 
                 for (auto& p : curve.points) {
                     uint16_t time = *timingsPtr;
@@ -589,7 +592,6 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                     int16_t qx_val = valuesPtr[0];
                     int16_t qy_val = valuesPtr[1];
                     int16_t qz_val = valuesPtr[2];
-
 
                     if (mVersion == kMVersionRedux && !disableBSwap) {
                         time = _byteswap_ushort(time);
@@ -620,6 +622,12 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
 
                     *rcast<quat*>(&p.value) = Normalize(*rcast<quat*>(&p.value));
 
+                    if (index > 0)
+                        *rcast<quat*>(&p.value) = QuatSlerp(*rcast<quat*>(&prevP.value), *rcast<quat*>(&p.value), 0.3);
+
+                    prevP = p;
+
+                    index++;    
                     timingsPtr++;
                     valuesPtr += 3;
                 }
