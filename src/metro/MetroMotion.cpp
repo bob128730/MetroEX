@@ -391,7 +391,7 @@ enum class AttribCurveType : uint8_t {
 bool MetroMotion::LoadInternal() {
     bool result = false;
 
-    MyArray<CharString> smoothBones = { "bip01_r_thigh", "bip01_r_thigh"};
+    MyArray<CharString> smoothBones = { "bip01_r_thigh", "bip01_l_thigh"};
 
     if (!mMotionsData.empty() && mMotionsData.size() > mMotionsOffsetsSize) {
         uint8_t* ptr = mMotionsData.data();
