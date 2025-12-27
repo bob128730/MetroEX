@@ -733,31 +733,47 @@ namespace MetroEX {
 
             const MetroSkeleton* skeleton = mModel->GetSkeleton();
 
-            for (size_t i = 0; i < numBones; ++i) {
+            for (size_t i = 0; i < numBones; ++i) { 
                 const AnimBone& b = mAnimation->bones[i];
 
-                quat q = mCurrentMotion->GetBoneRotation(b.idx, key);
-                vec3 t = mCurrentMotion->GetBonePosition(b.idx, key);
-                vec3 s = mCurrentMotion->GetBoneScale(b.idx, key);
+                if (mCurrentMotion->IsBoneAnimated(b.idx)) {
+                    quat q = mCurrentMotion->GetBoneRotation(b.idx, key);
+                    vec3 t = mCurrentMotion->GetBonePosition(b.idx, key);
+                    vec3 s = mCurrentMotion->GetBoneScale(b.idx, key);
 
-                mat4& m = mConstantBufferData->bones[b.idx];
+                    mat4& m = mConstantBufferData->bones[b.idx];
 
-                m = MatFromQuat(q);
-                
-                //TODO: Find out if this is the right way to apply scale
-                if (mCurrentMotion->mVersion == mCurrentMotion->kMVersionRedux) {
-                    if(s.x > 0.0f)
-                        m[0] *= s.x;
-                    if(s.y > 0.0f)
-                        m[1] *= s.y;
-                    if(s.z > 0.0f)
-                        m[2] *= s.z;
+                    m = MatFromQuat(q);
+
+                    //TODO: Find out if this is the right way to apply scale
+                    if (mCurrentMotion->mVersion == mCurrentMotion->kMVersionRedux) {
+                        if(s.x > 0.0f)
+                            m[0] *= s.x;
+                        if(s.y > 0.0f)
+                            m[1] *= s.y;
+                        if(s.z > 0.0f)
+                            m[2] *= s.z;
+                    }
+
+                    m[3] = vec4(t, 1.0f);
+
+                    if (b.parentIdx != MetroBone::InvalidIdx) {
+                        m = mConstantBufferData->bones[b.parentIdx] * m;
+                    }
                 }
+                else {
+                    quat q = skeleton->GetBoneRotation(b.idx);
+                    vec3 t = skeleton->GetBonePosition(b.idx);
+                    
+                    mat4& m = mConstantBufferData->bones[b.idx];
 
-                m[3] = vec4(t, 1.0f);
+                    m = MatFromQuat(q);
+                    
+                    m[3] = vec4(t, 1.0f);
 
-                if (b.parentIdx != MetroBone::InvalidIdx) {
-                    m = mConstantBufferData->bones[b.parentIdx] * m;
+                    if (b.parentIdx != MetroBone::InvalidIdx) {
+                        m = mConstantBufferData->bones[b.parentIdx] * m;
+                    }
                 }
             }
 

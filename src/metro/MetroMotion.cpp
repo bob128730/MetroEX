@@ -1,4 +1,5 @@
 #include "MetroMotion.h"
+#include "MetroSkeleton.h"
 
 PACKED_STRUCT_BEGIN
 struct MotionDataHeader_Exodus {   // size = 48 bytes
@@ -28,7 +29,7 @@ enum MotionChunks {
     MC_DataChunk    = 0x00000009,
 };
 
-MetroMotion::MetroMotion(const CharString& name)
+MetroMotion::MetroMotion(const CharString& name, MetroSkeleton *skeleton)
     : mName(name)
     // header
     , mVersion(0)
@@ -47,6 +48,7 @@ MetroMotion::MetroMotion(const CharString& name)
     , mMotionsDataSize(0)
     , mMotionsOffsetsSize(0)
     , mHighQualityBones()
+    , mSkeleton(skeleton)
 {
 
 }
@@ -385,9 +387,11 @@ enum class AttribCurveType : uint8_t {
     Empty           = 7     // no curve, why not just filter it out with mask ???
 };
 
-
+#pragma unmanaged 
 bool MetroMotion::LoadInternal() {
     bool result = false;
+
+    MyArray<CharString> smoothBones = { "bip01_r_thigh", "bip01_r_thigh"};
 
     if (!mMotionsData.empty() && mMotionsData.size() > mMotionsOffsetsSize) {
         uint8_t* ptr = mMotionsData.data();
@@ -411,6 +415,17 @@ bool MetroMotion::LoadInternal() {
         for (size_t boneIdx = 0, flatIdx = 0; boneIdx < mNumBones; ++boneIdx) {
             bool bonePresent;
             bool motionHasThisBone;
+            bool smooth = false;
+
+            CharString boneName;
+            if(mSkeleton) 
+                boneName = mSkeleton->GetBoneName(boneIdx);
+
+            for (CharString bone : smoothBones) {
+                if (bone == boneName && this->GetName() == "s_idle_3")
+                    smooth = true;
+            }
+
             if (mVersion == kMVersionRedux) {
                 bonePresent = mAffectedBones_Redux.IsPresent(boneIdx);
                 motionHasThisBone = hdr.Redux->bonesMask.IsPresent(boneIdx);
@@ -438,11 +453,11 @@ bool MetroMotion::LoadInternal() {
                     offsetS = _byteswap_ulong(offsetS); disableBSwap = false;
                 }
 
-                this->ReadAttributeCurve(ptr + offsetQ, mBonesRotations[boneIdx], 4, disableBSwap);
-                this->ReadAttributeCurve(ptr + offsetT, mBonesPositions[boneIdx], 3, disableBSwap);
+                this->ReadAttributeCurve(ptr + offsetQ, mBonesRotations[boneIdx], 4, disableBSwap, smooth);
+                this->ReadAttributeCurve(ptr + offsetT, mBonesPositions[boneIdx], 3, disableBSwap, false);
 
                 if(mVersion == kMVersionRedux)
-                    this->ReadAttributeCurve(ptr + offsetS, mBonesScales[boneIdx], 3, disableBSwap);
+                    this->ReadAttributeCurve(ptr + offsetS, mBonesScales[boneIdx], 3, disableBSwap, false);
 
                 ++flatIdx;
             }
@@ -454,7 +469,43 @@ bool MetroMotion::LoadInternal() {
     return result;
 }
 
-void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& curve, const size_t attribSize, bool disableBSwap) {
+inline bool SignFlipBack(float a, float b, float c, float min) {
+    const float d1 = b - a;
+    const float d2 = c - b;
+
+    if (std::fabs(d1) < min || std::fabs(d2) < min)
+        return false;
+
+    return (d1 > 0.f && d2 < 0.f) || (d1 < 0.f && d2 > 0.f);
+}
+
+void smoothQuats(MyArray<AttributeCurve::AttribPoint>& quats) {
+
+    MyArray<AttributeCurve::AttribPoint> fixed;
+    fixed.reserve(quats.size());
+    fixed.push_back(quats.front());
+
+    for (size_t i = 1; i + 1 < quats.size(); i++) {
+        const auto& prev = quats[i - 1].value;
+        const auto& curr = quats[i].value;
+        const auto& next = quats[i + 1].value;
+
+        bool outlier = SignFlipBack(prev.x, curr.x, next.x, 0.0001) ||
+            SignFlipBack(prev.y, curr.y, next.y, 0.0001) ||
+            SignFlipBack(prev.z, curr.z, next.z, 0.0001);
+
+        if (!outlier) {
+            fixed.push_back(quats[i]);
+        }
+        else {
+            fixed.push_back(quats[i+1]);
+            i++;
+        }
+    }
+    quats = fixed;
+}
+
+void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& curve, const size_t attribSize, bool disableBSwap, bool smooth) {
     uint32_t curveHeader = *rcast<const uint32_t*>(curveData);
 
     if (mVersion == kMVersionRedux && !disableBSwap)
@@ -584,7 +635,6 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
                 const int16_t* valuesPtr = rcast<const int16_t*>(curveData + (numPoints * sizeof(int16_t)));
 
                 int index = 0;
-                AttributeCurve::AttribPoint prevP;
 
                 for (auto& p : curve.points) {
                     uint16_t time = *timingsPtr;
@@ -622,14 +672,12 @@ void MetroMotion::ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& c
 
                     *rcast<quat*>(&p.value) = Normalize(*rcast<quat*>(&p.value));
 
-                    if (index > 0)
-                        *rcast<quat*>(&p.value) = QuatSlerp(*rcast<quat*>(&prevP.value), *rcast<quat*>(&p.value), 0.3);
-
-                    prevP = p;
-
                     index++;    
                     timingsPtr++;
                     valuesPtr += 3;
+                }
+                if (smooth) {
+                    smoothQuats(curve.points);
                 }
             } break;
         }

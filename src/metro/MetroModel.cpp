@@ -257,7 +257,7 @@ static FbxVector4 MetroVecToFbxVec(const vec3& v) {
 }
 
 static FbxVector4 MetroRotToFbxRot(const quat& q) {
-    vec3 euler = QuatToEuler(q);
+    vec3 euler = QuatToEuler(q);    
     return FbxVector4(Rad2Deg(euler.x), Rad2Deg(euler.y), Rad2Deg(euler.z));
 }
 
@@ -435,6 +435,43 @@ static void AddAnimTrackToScene(FbxScene* scene, const MetroMotion* motion, cons
             rotationCurve[0]->KeyModifyEnd();
             rotationCurve[1]->KeyModifyEnd();
             rotationCurve[2]->KeyModifyEnd();
+        }
+        else {
+            FbxVector4 t = boneNode->LclTranslation.Get();
+            FbxVector4 r = boneNode->LclRotation.Get();
+
+            FbxTime t0;
+            t0.SetSecondDouble(0.0);
+
+            for (int k = 0; k < 3; ++k) {
+                FbxAnimCurve* c =
+                    boneNode->LclTranslation.GetCurve(animLayer,
+                        k == 0 ? FBXSDK_CURVENODE_COMPONENT_X :
+                        k == 1 ? FBXSDK_CURVENODE_COMPONENT_Y :
+                        FBXSDK_CURVENODE_COMPONENT_Z,
+                        true);
+
+                c->KeyModifyBegin();
+                int ki = c->KeyAdd(t0);
+                c->KeySetValue(ki, (float)t[k]);
+                c->KeySetInterpolation(ki, FbxAnimCurveDef::eInterpolationConstant);
+                c->KeyModifyEnd();
+            }
+
+            for (int k = 0; k < 3; ++k) {
+                FbxAnimCurve* c =
+                    boneNode->LclRotation.GetCurve(animLayer,
+                        k == 0 ? FBXSDK_CURVENODE_COMPONENT_X :
+                        k == 1 ? FBXSDK_CURVENODE_COMPONENT_Y :
+                        FBXSDK_CURVENODE_COMPONENT_Z,
+                        true);
+
+                c->KeyModifyBegin();
+                int ki = c->KeyAdd(t0);
+                c->KeySetValue(ki, (float)r[k]);
+                c->KeySetInterpolation(ki, FbxAnimCurveDef::eInterpolationConstant);
+                c->KeyModifyEnd();
+            }
         }
     }
 
@@ -769,7 +806,7 @@ const MetroMotion* MetroModel::GetMotion(const size_t idx) {
         const CharString& name = this->GetMotionName(idx);
         const MyHandle file = mMotions[idx].file;
 
-        motion = new MetroMotion(name);
+        motion = new MetroMotion(name, mSkeleton);
         MemStream stream = MetroFileSystem::Get().OpenFileStream(file);
         motion->LoadFromData(stream);
 

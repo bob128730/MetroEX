@@ -1,5 +1,6 @@
 #pragma once
 #include "MetroTypes.h"
+#include "MetroSkeleton.h"
 
 struct AttributeCurve {
     struct AttribPoint {
@@ -15,7 +16,7 @@ public:
     static const size_t kFrameRate = 30;
     static const size_t kMVersionRedux = 0xF;
 public:
-    MetroMotion(const CharString& name = "");
+    MetroMotion(const CharString& name = "", MetroSkeleton *skeleton = nullptr);
     ~MetroMotion();
 
     bool                    LoadHeader(MemStream& stream);
@@ -36,7 +37,7 @@ public:
 
 //private:
     bool                    LoadInternal();
-    void                    ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& curve, const size_t attribSize, bool disableBSwap);
+    void                    ReadAttributeCurve(const uint8_t* curveData, AttributeCurve& curve, const size_t attribSize, bool disableBSwap, bool smooth);
 
 //private:
     CharString              mName;
@@ -60,6 +61,7 @@ public:
     size_t                  mMotionsOffsetsSize;
     Bitset256               mHighQualityBones;
     Bitset128               mHighQualityBones_Redux;
+    MetroSkeleton           *mSkeleton;
     // data
     BytesArray              mMotionsData;
     // curves
